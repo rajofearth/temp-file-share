@@ -15,9 +15,10 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
-# Activate the modal venv
+# Activate root-level modal venv
+VENV_DIR="$(dirname "$SCRIPT_DIR")/.venv"
 export PATH="$HOME/.local/bin:$PATH"
-source .venv/bin/activate 2>/dev/null || {
+source "$VENV_DIR/bin/activate" 2>/dev/null || {
     echo "✗ No .venv found. Run: uv venv && source .venv/bin/activate && uv pip install modal"
     exit 1
 }
