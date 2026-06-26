@@ -1,9 +1,11 @@
 # NanoChat Checkpoint Evaluation Report
 
 **Date:** 2026-06-26
-**Models Compared:** sft (step 1500) vs d6 (step 971)
+**Models Compared:** sft (step 1500, with KD) vs d6 (step 971, without KD)
 **Architecture:** GPT — 6 layers, 384 embed dim, 6 attention heads (~73.5M parameters)
 **Evaluator:** Manual qualitative assessment across 12 questions
+
+> **Note on naming:** Here `d6` refers to the non-KD SFT checkpoint (step 971, stored in `checkpoints/sft-d6/`), not the pretrain base or architecture variant.
 
 ---
 

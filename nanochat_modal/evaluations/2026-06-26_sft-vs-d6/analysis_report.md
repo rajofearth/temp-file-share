@@ -13,8 +13,8 @@ Both models are small (73.5M parameters) and exhibit severe hallucination across
 
 | Metric | sft | d6 |
 |---|---|---|
-| Wins | 3 | 2 |
-| Ties | 7 | 7 |
+| Wins | 4 | 2 |
+| Ties | 6 | 6 |
 | Avg response time | 3.7s | 3.7s |
 
 ---
@@ -38,7 +38,7 @@ Both models are small (73.5M parameters) and exhibit severe hallucination across
 
 ## 3. Scorecard
 
-### Overall | sft: ❮ 3 wins / 7 ties / 2 losses ❯ | d6: ❮ 2 wins / 7 ties / 3 losses ❯
+### Overall | sft: ❮ 4 wins / 6 ties / 2 losses ❯ | d6: ❮ 2 wins / 6 ties / 4 losses ❯
 
 | Question | Category | sft | d6 | Winner | Notes |
 |---|---|---|---|---|---|
@@ -59,9 +59,9 @@ Both models are small (73.5M parameters) and exhibit severe hallucination across
 
 | Result | Count |
 |---|---|
-| **sft wins** | 3 (Q3, Q4, Q6, Q12) |
+| **sft wins** | 4 (Q3, Q4, Q6, Q12) |
 | **d6 wins** | 2 (Q1, Q9) |
-| **Ties** | 7 (Q2, Q5, Q7, Q8, Q10, Q11) |
+| **Ties** | 6 (Q2, Q5, Q7, Q8, Q10, Q11) |
 
 > Note: Q4 is scored as an sft win because sft gave a numeric answer (even though wrong), while d6 failed to produce any answer at all.
 

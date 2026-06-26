@@ -21,11 +21,11 @@ The comparison script loads two different checkpoint versions, runs the same set
 ```bash
 uv run python -m scripts.compare_checkpoints \
     --ckpt1 /mnt/p/temp-file-share/nanochat_modal/checkpoints/sft \
-    --ckpt2 /mnt/p/temp-file-share/nanochat_modal/nanochat/chatsft_checkpoints/d6 \
+    --ckpt2 /mnt/p/temp-file-share/nanochat_modal/checkpoints/sft-d6 \
     --tokenizer /mnt/p/temp-file-share/nanochat_modal/checkpoints/tokenizer
 ```
 
-This loads the `sft` checkpoint (step 1500) and the `d6` checkpoint (step 971) and runs the default 12 questions through both.
+This loads the `sft` checkpoint (step 1500, with KD) and the `sft-d6` checkpoint (step 971, without KD) and runs the default 12 questions through both.
 
 ### Options
 
@@ -57,7 +57,7 @@ Then pass it:
 ```bash
 uv run python -m scripts.compare_checkpoints \
     --ckpt1 checkpoints/sft \
-    --ckpt2 nanochat/chatsft_checkpoints/d6 \
+    --ckpt2 checkpoints/sft-d6 \
     --tokenizer checkpoints/tokenizer \
     --questions my_questions.json
 ```
@@ -119,7 +119,7 @@ Q1: What is the capital of France?
 
   └─
 
-  ┌─ [d6 - step 971]  (1.5s)
+  ┌─ [sft-d6 - step 971]  (1.5s)
   │ Paris is the capital of France.
 
   └─
@@ -145,9 +145,9 @@ When comparing outputs, look for:
 | Coherent multi-sentence structure | Better language modeling |
 | No repetition / looping | Better training quality |
 
-### Known Baseline (sft vs d6)
+### Known Baseline (sft vs sft-d6)
 
-From our comparison runs:
+From our comparison runs (sft = step 1500 with KD, sft-d6 = step 971 without KD):
 
 | Capability | Assessment |
 |------------|-----------|
@@ -175,16 +175,16 @@ From our comparison runs:
 ```bash
 # Compare the old checkpoint vs a new one
 uv run python -m scripts.compare_checkpoints \
-    --ckpt1 checkpoints/sft/old \
-    --ckpt2 checkpoints/sft/new \
+    --ckpt1 checkpoints/sft \
+    --ckpt2 checkpoints/sft-d6 \
     --tokenizer checkpoints/tokenizer \
     --temperature 0.7 \
     --max-tokens 256
 
 # Also run at temperature 0.0 for deterministic comparison
 uv run python -m scripts.compare_checkpoints \
-    --ckpt1 checkpoints/sft/old \
-    --ckpt2 checkpoints/sft/new \
+    --ckpt1 checkpoints/sft \
+    --ckpt2 checkpoints/sft-d6 \
     --tokenizer checkpoints/tokenizer \
     --temperature 0.0 \
     --max-tokens 256

@@ -24,8 +24,7 @@ nanochat_modal/
 │   ├── INFERENCE.md         # Web/CLI inference guide
 │   ├── COMPARISON.md        # Checkpoint comparison guide
 │   ├── SFT_REPORT.md        # Technical SFT report
-│   ├── DEVLOG.md            # Development log and decisions
-│   └── COMPARISON.md        # Checkpoint comparison guide
+│   └── DEVLOG.md            # Development log and decisions
 ```
 
 ## Quick Start

@@ -199,10 +199,14 @@ Five patches are required for PyTorch 2.3 compatibility on Modal:
 
 ### Checkpoint Comparison
 
-| Checkpoint | Steps | Val BPB | KD | Optimizer State |
-|------------|-------|---------|----|-----------------|
-| sft | 1,500 | 0.476 | Yes (lfm25_350m) | Yes (2 ranks) |
-| d6 | 971 | 0.489 | No | No |
+The project produced two SFT checkpoints (see the [technical report](./SFT_REPORT.md) for a complete walkthrough):
+
+| Checkpoint | Steps | Val BPB | KD | Optimizer State | Description |
+|------------|-------|---------|----|-----------------|-------------|
+| `sft` | 1,500 | 0.476 | Yes (lfm25_350m) | Yes (2 ranks) | Full KD run — rebalanced mixture, completed all 1,500 steps |
+| `sft-d6` (labeled `d6` in comparisons) | 971 | 0.489 | No | No | Non-KD run — original mixture exhausted at step 971 |
+
+> The label `d6` in evaluation reports refers to the non-KD SFT checkpoint (step 971), not the pretrain base.
 
 ### Key Findings
 
@@ -233,9 +237,9 @@ Five patches are required for PyTorch 2.3 compatibility on Modal:
 
 ---
 
-## Data Exhaustion Issue
+## Data Exhaustion Issue (Non-KD Run)
 
-The training only completed **971 of 1,500 planned steps** because the data mixture was exhausted after one epoch (~1.07M rows consumed). To reach 1,500 steps, additional epochs of the mixture are needed (with reshuffling for variety), or more data must be added.
+The initial non-KD SFT run completed only **971 of 1,500 planned steps** because the data mixture was exhausted after one epoch (~1.07M rows consumed). A subsequent KD run with a rebalanced mixture (fewer spelling tasks, more epochs of core datasets) successfully completed all **1,500 steps** with a val BPB of 0.4763.
 
 ---
 

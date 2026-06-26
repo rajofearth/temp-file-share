@@ -106,7 +106,7 @@ Using the shell wrapper:
 
 ### Metrics
 
-**Note on validation BPB:** The pretrained model scores ~0.64 val BPB on FineWeb-EDU (its pretrain validation set), but ~0.80 on the SFT validation mixture (SmolTalk+MMLU+GSM8K). The higher value is expected — the SFT val data is out-of-distribution for the pretrained model before fine-tuning.
+**Note on validation BPB:** The pretrained model scores ~0.996 val BPB on FineWeb-EDU (its pretrain validation set), but ~0.80 on the SFT validation mixture (SmolTalk+MMLU+GSM8K). The SFT val data is out-of-distribution for the pretrained model before fine-tuning, so its BPB starts higher (worse) and drops during SFT training.
 
 ### Hyperparameters
 
@@ -257,13 +257,13 @@ This is particularly valuable for small models like d6 that benefit from focused
 ## Ways to Improve
 
 ### More Training Epochs (~$1/epoch)
-The current run completed only 971 of 1,500 planned steps because the data mixture exhausted. Running additional SFT passes would reinforce learning.
+The initial non-KD SFT run stopped at 971 of 1,500 planned steps due to data exhaustion. A subsequent KD run with a rebalanced mixture completed all 1,500 steps. Running additional epochs would further reinforce learning.
 
 ### Larger Model (d26, ~1.6B Params, ~$48)
 The d6 model (73.5M params) is fundamentally limited. The d26 model (~1.6B params) is what nanochat targets for GPT-2 scale capability. Training on 8× H100 would take ~2 hours.
 
 ### Better Data Mixture
-The current mixture has ~26% spelling tasks. A revised mixture that avoids data exhaustion and improves signal:
+The initial mixture had ~26% spelling tasks, which caused data exhaustion at step 971. A revised mixture that avoids data exhaustion and improves signal:
 
 | Component | Current | Proposed | Change |
 |-----------|---------|----------|--------|
@@ -273,7 +273,7 @@ The current mixture has ~26% spelling tasks. A revised mixture that avoids data 
 | GSM8K | ~7.5K rows × 4 epochs | ~7.5K rows × 8 epochs | +2× |
 | **Total** | **~1.07M rows** | **~1.05M rows** | ≈ same size |
 
-This doubles the math signal, reduces spelling noise, and importantly avoids data exhaustion at step 971 — enabling the full 1,500-step training plan to complete.
+This doubles the math signal, reduces spelling noise, and importantly avoids data exhaustion at step 971 — enabling the full 1,500-step training plan to complete (as demonstrated by the second KD run).
 
 ### Enable ChatCORE During Training
 Set `--chatcore-every=500` to get per-task benchmark scores throughout training.

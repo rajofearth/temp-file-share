@@ -61,14 +61,18 @@ The persistent Modal volume `nanochat-vol` stores:
 
 Local copies downloaded from the volume reside under `checkpoints/`:
 
-| File | Size |
-|------|------|
-| `checkpoints/pretrain/model_008600.pt` | 280.5 MB |
-| `checkpoints/pretrain/optim_008600_rank0.pt` | 260.3 MB |
-| `checkpoints/pretrain/optim_008600_rank1.pt` | 260.3 MB |
-| `checkpoints/pretrain/meta_*.json` | (16 metadata files, steps 2000–8600) |
-| `checkpoints/sft/model_000971.pt` | 280.5 MB |
-| `checkpoints/sft/meta_000971.json` | SFT metadata |
+| File / Directory | Size | Description |
+|------------------|------|-------------|
+| `checkpoints/pretrain/model_008600.pt` | 280.5 MB | Base pretrain weights (step 8600) |
+| `checkpoints/pretrain/optim_008600_rank0.pt` | 260.3 MB | Optimizer state GPU 0 |
+| `checkpoints/pretrain/optim_008600_rank1.pt` | 260.3 MB | Optimizer state GPU 1 |
+| `checkpoints/pretrain/meta_*.json` | — | (16 metadata files, steps 2000–8600) |
+| `checkpoints/sft/model_001500.pt` | 280.5 MB | SFT with knowledge distillation (step 1500) |
+| `checkpoints/sft/meta_001500.json` | — | SFT metadata (KD run) |
+| `checkpoints/sft-d6/model_000971.pt` | 280.5 MB | SFT without KD (step 971, data exhausted) |
+| `checkpoints/sft-d6/meta_000971.json` | — | SFT metadata (no-KD run) |
+| `checkpoints/tokenizer/tokenizer.pkl` | 402.5 KB | Trained BPE tokenizer |
+| `checkpoints/tokenizer/token_bytes.pt` | 129.2 KB | Token byte mapping |
 
 ---
 
@@ -292,14 +296,15 @@ Linear warmup (10% of steps) → Constant (40% of steps) → Linear decay to 0 (
 
 ### 6.1 Metrics
 
-| Step | Validation BPB | Notes |
-|------|---------------|-------|
-| 0 (pretrain) | ~0.64 | Base d6 checkpoint at step 8600 on FineWeb-EDU (pretrain val set) |
-| 0 (SFT baseline) | ~0.80 | Same checkpoint evaluated on SFT validation data (SmolTalk+MMLU+GSM8K) — higher because SFT data is OOD for the pretrained model |
-| 47 | 0.6411 | First partial run (1 micro-batch, crashed on `psutil` error) |
-| **971** | **0.4891** | **Full SFT run — 1 epoch of the data mixture** |
+| Checkpoint / Step | Validation BPB | Notes |
+|-------------------|---------------|-------|
+| Pretrain (step 8600) | 0.9957 | Base d6 checkpoint on FineWeb-EDU (pretrain val set) |
+| Pretrain on SFT val | ~0.80 | Same checkpoint evaluated on SFT validation data (SmolTalk+MMLU+GSM8K) — higher because SFT data is OOD for the pretrained model |
+| 47 (partial, `psutil` crash) | 0.6411 | First test run with `num_iterations=1500` yielding 47 optimizer steps (1,500 micro-batches). Crashed at reporting (see Bug 2). |
+| **sft-d6 (step 971, no KD)** | **0.4891** | Non-KD SFT run — stopped at 971 of 1,500 steps due to data exhaustion |
+| **sft (step 1500, with KD)** | **0.4763** | **Full KD SFT run — completed all 1,500 planned steps** |
 
-The validation BPB (bits per byte) dropped from ~0.64 to **0.4891**, indicating the model learned to fit the SFT data distribution significantly better than the pretrained baseline. The meta file confirms:
+The validation BPB dropped significantly from the pretrain baseline, indicating the model learned to fit the SFT data distribution. The **sft-d6** meta file (non-KD run) confirms:
 
 ```json
 {
@@ -327,7 +332,40 @@ The validation BPB (bits per byte) dropped from ~0.64 to **0.4891**, indicating 
 }
 ```
 
-**Note:** The training ran for 971 steps (out of 1,500 planned) because the data mixture was exhausted after 1 epoch — all ~1.07M rows were consumed by step 971, and the data loader had no more data. To reach all 1,500 steps, the SFT data would need more epochs or more total data.
+The next meta block shows the final KD run at step 1500:
+
+```json
+{
+  "step": 1500,
+  "val_bpb": 0.47630114075293484,
+  "model_config": {
+    "n_layer": 6,
+    "n_head": 6,
+    "n_kv_head": 6,
+    "n_embd": 384,
+    "vocab_size": 32768,
+    "sequence_len": 2048
+  },
+  "user_config": {
+    "num_iterations": 48000,
+    "max_seq_len": 2048,
+    "device_batch_size": 4,
+    "total_batch_size": 524288,
+    "eval_every": 200,
+    "eval_tokens": 131072,
+    "mmlu_epochs": 3,
+    "gsm8k_epochs": 4,
+    "load_optimizer": 0
+  }
+}
+```
+
+**Training history — two SFT runs:**
+
+1. **Non-KD run (`sft-d6`)** — SFT without knowledge distillation. The original data mixture exhausted after 1 epoch (~1.07M rows), stopping at step 971 (val_bpb 0.4891).
+2. **KD run (`sft`)** — SFT with KD (teacher: LFM2.5-350M) using a rebalanced mixture. Completed all 1,500 planned steps (val_bpb 0.4763). The KD run used `device_batch_size=2` (instead of 4) to accommodate the teacher's memory footprint.
+
+Both checkpoints are stored locally under `checkpoints/` (see §2.4).
 
 ### 6.2 Training Performance
 
@@ -417,11 +455,14 @@ nanochat_modal/
 │   │   ├── meta_*.json                # Training metadata (16 files)
 │   │   ├── optim_008600_rank0.pt      # Optimizer state GPU 0 (260.3 MB)
 │   │   └── optim_008600_rank1.pt      # Optimizer state GPU 1 (260.3 MB)
-│   └── sft/                           # SFT checkpoint (local copy)
+│   ├── sft/                           # SFT with KD (local copy, step 1500)
+│   │   ├── model_001500.pt            # Model weights (280.5 MB)
+│   │   ├── meta_001500.json           # Training metadata
+│   │   ├── optim_001500_rank0.pt      # Optimizer state GPU 0 (260.3 MB)
+│   │   └── optim_001500_rank1.pt      # Optimizer state GPU 1 (260.3 MB)
+│   └── sft-d6/                        # SFT without KD (local copy, step 971)
 │       ├── model_000971.pt            # Model weights (280.5 MB)
 │       └── meta_000971.json           # Training metadata
-├── nanochat_sft_modal_runbook.md      # Full setup runbook (markdown)
-├── nanochat_sft_modal_runbook.docx     # Runbook (Word format)
 ├── README.md                          # Project README
 └── SFT_REPORT.md                      # This file
 ```
@@ -486,7 +527,7 @@ cd training/
 ### 8.5 Download Checkpoint Locally
 
 ```bash
-modal volume get nanochat-vol /chatsft_checkpoints/d6/model_000971.pt ./my_sft_model.pt
+modal volume get nanochat-vol /chatsft_checkpoints/d6/model_001500.pt ./my_sft_model.pt
 ```
 
 ---
@@ -495,7 +536,7 @@ modal volume get nanochat-vol /chatsft_checkpoints/d6/model_000971.pt ./my_sft_m
 
 ### 9.1 More Training Epochs (Immediate, ~$1/epoch)
 
-The training only completed **971 of 1,500 planned steps** because the data mixture was exhausted. Running additional SFT passes (3–5 more epochs) would reinforce the learning:
+The initial non-KD SFT run completed **971 of 1,500 planned steps** because the data mixture was exhausted (a subsequent KD run with rebalanced mixture completed all 1,500). Running additional SFT passes with more training data or epochs would further reinforce learning:
 
 ```bash
 # Modify the training script to repeat data or reduce total_batch_size
@@ -535,7 +576,7 @@ The current mixture heavily emphasizes spelling tasks (280K of ~1.07M rows, ~26%
 - **Adding** code data (HumanEval is eval-only, no training split)
 - **Increasing** SmolTalk epochs (460K rows × 2–3 epochs would better teach conversation format)
 
-A revised mixture that avoids data exhaustion at step 971 while keeping total rows similar:
+A revised mixture that avoids data exhaustion (as demonstrated by the second run reaching 1,500 steps) while keeping total rows similar:
 
 | Component | Current | Proposed | Change |
 |-----------|---------|----------|--------|
@@ -584,8 +625,8 @@ The `--chatcore-every 0` flag disables ChatCORE evaluation during training becau
 | Tokenizer | `/vol/tokenizer/tokenizer.pkl` |
 | Token bytes | `/vol/tokenizer/token_bytes.pt` |
 | Data shards | `/vol/base_data/shard_*.parquet` |
-| SFT checkpoint (output) | `/vol/chatsft_checkpoints/d6/model_000971.pt` |
-| SFT metadata | `/vol/chatsft_checkpoints/d6/meta_000971.json` |
+| SFT checkpoint (KD run, step 1500) | `/vol/chatsft_checkpoints/d6/model_001500.pt` |
+| SFT metadata (KD run) | `/vol/chatsft_checkpoints/d6/meta_001500.json` |
 | Identity conversations | `/vol/identity_conversations.jsonl` |
 
 ## Appendix B: GPU Configuration Comparison
@@ -610,4 +651,4 @@ All configurations multiply to exactly `total_batch_size = 524,288`:
 
 ---
 
-*Report generated June 2026. For questions, refer to the [nanochat_sft_modal_runbook.md](./nanochat_sft_modal_runbook.md) or open an issue on the project repository.*
+*Report generated June 2026. For questions, refer to the [README](../README.md) or the [DEVLOG](./DEVLOG.md).*
