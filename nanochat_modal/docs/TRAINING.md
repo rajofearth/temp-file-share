@@ -104,6 +104,10 @@ Using the shell wrapper:
 ./run_sft.sh eval         # run ChatCORE evaluation
 ```
 
+### Metrics
+
+**Note on validation BPB:** The pretrained model scores ~0.64 val BPB on FineWeb-EDU (its pretrain validation set), but ~0.80 on the SFT validation mixture (SmolTalk+MMLU+GSM8K). The higher value is expected — the SFT val data is out-of-distribution for the pretrained model before fine-tuning.
+
 ### Hyperparameters
 
 | Parameter | Value | Notes |
@@ -215,6 +219,7 @@ content = content.replace(", enable_gqa=enable_gqa", "")
 | Training time | ~35 minutes |
 | Cost | ~$1.20 (A10G at ~$0.60/hr × 2 GPUs × 35 min) |
 | Volume | `nanochat-vol` mounted at `/vol` |
+| Volume consistency | Eventually consistent — call `volume.commit()` after writes to flush to durable storage |
 | Checkpoint path (on volume) | `/vol/chatsft_checkpoints/d6/` |
 
 ### GPU Configuration Comparison
@@ -292,3 +297,4 @@ Set `--chatcore-every=500` to get per-task benchmark scores throughout training.
 - **Enable C++ stack traces**: Set `TORCH_SHOW_CPP_STACKTRACES=1` in the environment to get detailed CUDA error traces instead of silent failures.
 - **Capture torchrun output**: In the Modal training script, use `subprocess.run(cmd, capture_output=True, text=True)` and print the last 5000 characters of stdout/stderr — otherwise torchrun swallows error messages.
 - **Verify assistant tokens**: Run `ids, mask = tokenizer.render_conversation(ex); print(sum(mask[:2048]))` to check that assistant tokens are present in the first 2048 positions.
+- **Volume changes not saved**: Always call `volume.commit()` after training completes — Modal volumes are eventually consistent and commit flushes writes to durable storage. Without it, checkpoints written during a run may not persist.

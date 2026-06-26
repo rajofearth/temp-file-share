@@ -93,6 +93,14 @@ The teacher provides a richer supervision signal than raw token labels. With KD_
 
 **Critical finding:** Direct online logit-level KD with LFM2.5-350M is blocked by a **vocabulary mismatch**. nanochat uses its own `rustbpe` tokenizer (32,768 vocab, trained on FineWeb-EDU) while LFM2.5-350M uses Liquid's own BPE tokenizer with a completely different vocabulary. Feeding nanochat token IDs into LFM2.5-350M would index into different vocabulary entries, making KL divergence over logits undefined.
 
+#### How Decoupled Top-K KD Actually Works
+
+Liquid's decoupled Top-K KD (which works because their teacher and student share a tokenizer) decomposes the KL divergence via the chain rule into two terms:
+1. **Binary term**: Matches the total probability mass assigned to the top-K token set — is the teacher putting 90% or 40% probability on these K tokens?
+2. **Conditional KL within Top-K**: With temperature scaling, matches the shape of the distribution within the top-K set — how confident is the teacher among these K candidates?
+
+This decomposition avoids support mismatch and unstable losses that would arise from naively applying KL divergence to a truncated top-K distribution. For nanochat, even this approach requires either a same-tokenizer teacher (e.g., a larger nanochat model) or solving the cross-vocabulary alignment problem first.
+
 Liquid avoided this because their teacher (LFM1-7B) and student (LFM2-230M) share the same tokenizer and architecture family.
 
 #### Solutions Investigated
@@ -247,6 +255,24 @@ The training only completed **971 of 1,500 planned steps** because the data mixt
 - **RL fine-tuning**: Use the nanochat `chat_rl.py` pipeline for RL training
 - **Custom data generation**: Use the teacher model to generate higher-quality SFT data
 - **Systematic evaluation**: Run full ChatCORE benchmarks on all checkpoints
+
+### Research Reference: LFM2.5-230M
+
+The LFM2.5-230M model (released June 25, 2026) is a contemporary benchmark for small-model efficiency. Key characteristics for context:
+- **Architecture**: 16 blocks total — 10 double-gated short-range convolution blocks + 6 GQA attention blocks (hybrid, not pure transformer)
+- **Training**: 28T tokens pre-training (vs nanochat d6 FineWeb-EDU at ~4B tokens)
+- **Post-training**: SFT with distillation from LFM2.5-350M → DPO → multi-domain RL → model merging
+- **Hardware efficiency**: 213 tok/s on Samsung Galaxy S25 Ultra, 42 tok/s on Raspberry Pi 5
+
+Liquid achieves this with same-tokenizer KD (teacher and student share architecture family), hardware-in-the-loop architecture search, and massive token budgets. These advantages are not available to nanochat under current constraints, but the gap illustrates the headroom in data scale and architectural optimization.
+
+### Concrete: Online KD Implementation Plan (for same-tokenizer teacher)
+
+If a same-tokenizer teacher becomes available (e.g., nanochat d26 after pretraining), the changes needed for online logit-level KD are:
+
+1. **`gpt.py` — forward return signature**: Add a `return_logits=False` parameter. When `True` and targets are provided, return `(logits, loss)` instead of just `loss` — avoids a second forward pass just to get student logits.
+2. **`chat_sft.py` — training loop**: Replace `loss = model(x, y)` with student+teacher forward pass, compute top-K KL divergence, and combine using `KD_ALPHA`.
+3. **`nanochat_sft.py` — orchestrator**: Download teacher model weights to volume, pass teacher path to SFT script.
 
 ---
 

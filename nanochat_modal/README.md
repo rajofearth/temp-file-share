@@ -24,8 +24,8 @@ nanochat_modal/
 │   ├── INFERENCE.md         # Web/CLI inference guide
 │   ├── COMPARISON.md        # Checkpoint comparison guide
 │   ├── SFT_REPORT.md        # Technical SFT report
-│   └── SFT_MODAL_RUNBOOK.md # Full Modal runbook (also .docx)
-└── old/                     # Staging for unclear items
+│   ├── DEVLOG.md            # Development log and decisions
+│   └── COMPARISON.md        # Checkpoint comparison guide
 ```
 
 ## Quick Start
@@ -67,7 +67,9 @@ Detailed documentation lives in `docs/`:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Model architecture, checkpoints, file structure, loading/running |
 | [`docs/TRAINING.md`](docs/TRAINING.md) | Full training guide: setup, data pipeline, hyperparameters, evaluation |
 | [`docs/SFT_REPORT.md`](docs/SFT_REPORT.md) | Technical report from the SFT run |
-| [`docs/SFT_MODAL_RUNBOOK.md`](docs/SFT_MODAL_RUNBOOK.md) | Modal runbook with troubleshooting and batch size math |
+| [`docs/INFERENCE.md`](docs/INFERENCE.md) | Web/CLI inference guide |
+| [`docs/COMPARISON.md`](docs/COMPARISON.md) | Checkpoint comparison guide |
+| [`docs/DEVLOG.md`](docs/DEVLOG.md) | Development log and decisions |
 
 ## Prerequisites
 

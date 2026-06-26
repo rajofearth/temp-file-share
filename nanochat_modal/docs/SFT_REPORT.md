@@ -175,6 +175,8 @@ total_tokens_per_step = 524,288
 
 ### 4.3 Data Mixture
 
+The training dataset uses the **nanochat rustbpe tokenizer** (vocab_size=32,768) with **32,503 BPE merges** completed during training on 11 FineWeb-EDU shards (~1GB).
+
 The training dataset is a `TaskMixture` combining multiple sources. The counts below are computed from the nanochat source:
 
 | Component | Rows | Epochs | Total Rows |
@@ -292,7 +294,8 @@ Linear warmup (10% of steps) → Constant (40% of steps) → Linear decay to 0 (
 
 | Step | Validation BPB | Notes |
 |------|---------------|-------|
-| 0 (pretrain) | ~0.64 | Base d6 checkpoint at step 8600 on FineWeb-EDU |
+| 0 (pretrain) | ~0.64 | Base d6 checkpoint at step 8600 on FineWeb-EDU (pretrain val set) |
+| 0 (SFT baseline) | ~0.80 | Same checkpoint evaluated on SFT validation data (SmolTalk+MMLU+GSM8K) — higher because SFT data is OOD for the pretrained model |
 | 47 | 0.6411 | First partial run (1 micro-batch, crashed on `psutil` error) |
 | **971** | **0.4891** | **Full SFT run — 1 epoch of the data mixture** |
 
