@@ -351,7 +351,7 @@ def run_sft(
     print(f"  Total tokens/step: {TOTAL_BATCH_SIZE:,}")
     if teacher_path_str:
         print(
-            f"  Teacher: {TEACHER_HF_ID} (KD enabled, alpha={KD_ALPHA}, T={KD_TEMPERATURE}")
+            f"  Teacher: {TEACHER_HF_ID} (KD enabled, alpha={KD_ALPHA}, T={KD_TEMPERATURE}"
         )
     if resume_step > 0:
         print(f"  Resume from step {resume_step} (auto-detect)")
@@ -433,7 +433,9 @@ def run_sft(
                 cur = len(list(SFT_CHECKPOINT_DIR.glob("model_*.pt")))
                 if cur > _last_ckpt_count:
                     volume.commit()
-                    print(f"[volume] Committed {cur - _last_ckpt_count} new checkpoint(s)")
+                    print(
+                        f"[volume] Committed {cur - _last_ckpt_count} new checkpoint(s)"
+                    )
                     _last_ckpt_count = cur
             except Exception:
                 pass  # best-effort
@@ -460,7 +462,7 @@ def run_sft(
     for f in sorted(SFT_CHECKPOINT_DIR.iterdir()):
         print(f"  {f.name} ({f.stat().st_size / (1024 * 1024):.1f} MB)")
 
-    return _result.returncode
+    return _result_returncode
 
 
 @app.function(
