@@ -3,6 +3,7 @@ Chinchilla-1-73M — Chat interface
 Brand: monochromatic, Poppins / Playfair Display, minimal.
 """
 
+import base64
 import json
 import sys
 import time
@@ -30,6 +31,15 @@ META_PATH = CHECKPOINT_DIR / "chinchilla-1-73M.json"
 TOKENIZER_PKL = TOKENIZER_DIR / "tokenizer.pkl"
 
 DEVICE = torch.device("cpu")
+
+# ── Load logo as base64 data URI ──
+LOGO_PATH = REPO_DIR / "logo.png"
+if LOGO_PATH.exists():
+    with open(LOGO_PATH, "rb") as f:
+        _logo_b64 = base64.b64encode(f.read()).decode("ascii")
+    LOGO_DATA_URI = f"data:image/png;base64,{_logo_b64}"
+else:
+    LOGO_DATA_URI = ""
 
 _model = None
 _tokenizer = None
@@ -132,7 +142,9 @@ def build_chat_prompt(tokenizer, history_tuples, new_message):
 # ---------------------------------------------------------------------------
 
 
-def generate_stream(message, history, temperature, max_tokens, top_k):
+def generate_stream(
+    message, history, temperature, max_tokens, top_k, repetition_penalty
+):
     """Yields partial response strings for streaming into the chatbot."""
     model, tokenizer, meta = _model, _tokenizer, _meta
     if model is None:
@@ -171,6 +183,7 @@ def generate_stream(message, history, temperature, max_tokens, top_k):
         temperature=temperature,
         top_k=top_k,
         seed=42,
+        repetition_penalty=repetition_penalty,
     )
 
     response = ""
@@ -221,6 +234,7 @@ footer, .footer, .built-with { display: none !important; }
     width: 42px;
     height: 42px;
     border-radius: 50%;
+    background: #fff;
     border: 1.5px solid #333;
     display: flex;
     align-items: center;
@@ -232,7 +246,6 @@ footer, .footer, .built-with { display: none !important; }
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: invert(1);
 }
 #logo-mark .logo-fallback { font-size: 20px; line-height: 1; }
 
@@ -560,10 +573,10 @@ Research-scale model — smaller than GPT-2 Small.
 - Incompatible with llama.cpp / Ollama / Transformers
 """
 
-LOGO_HTML = """
+LOGO_HTML = f"""
 <div id="app-header">
   <div id="logo-mark">
-    <img src="/file=logo.png" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex';">
+    <img src="{LOGO_DATA_URI}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex';">
     <span class="logo-fallback" style="display:none;">▣</span>
   </div>
   <div id="header-text">
@@ -642,19 +655,19 @@ def create_ui():
                 temperature = gr.Slider(
                     0.0,
                     2.0,
-                    value=0.7,
+                    value=0.65,
                     step=0.05,
                     label="Temperature",
-                    info="Deterministic ←→ Random",
+                    info="0.65 recommended for factual queries",
                     elem_classes=["slider-wrap"],
                 )
                 max_tokens = gr.Slider(
                     16,
                     512,
-                    value=64,
+                    value=512,
                     step=16,
                     label="Max tokens",
-                    info="Keep ≤ 64 to limit rambling",
+                    info="Maximum tokens to generate",
                     elem_classes=["slider-wrap"],
                 )
                 top_k = gr.Slider(
@@ -664,6 +677,15 @@ def create_ui():
                     step=1,
                     label="Top-K",
                     info="Sampling vocabulary size",
+                    elem_classes=["slider-wrap"],
+                )
+                repetition_penalty = gr.Slider(
+                    1.0,
+                    2.0,
+                    value=1.15,
+                    step=0.05,
+                    label="Repetition penalty",
+                    info="Higher values discourage repeating tokens (1.15 recommended)",
                     elem_classes=["slider-wrap"],
                 )
 
@@ -679,7 +701,7 @@ def create_ui():
             """Immediately append user message; bot slot starts empty."""
             return "", history + [{"role": "user", "content": message}]
 
-        def bot_turn(history, temp, max_tok, topk):
+        def bot_turn(history, temp, max_tok, topk, rep_penalty):
             """Stream bot response token by token, yield stats too."""
             user_msg = history[-1]["content"]
             prev_history = history[:-1]
@@ -687,7 +709,7 @@ def create_ui():
             start = time.time()
             final_count = 0
             for partial, nt in generate_stream(
-                user_msg, prev_history, temp, max_tok, topk
+                user_msg, prev_history, temp, max_tok, topk, rep_penalty
             ):
                 history[-1]["content"] = partial
                 final_count = nt
@@ -699,13 +721,17 @@ def create_ui():
         msg_input.submit(
             user_turn, [msg_input, chatbot], [msg_input, chatbot], queue=False
         ).then(
-            bot_turn, [chatbot, temperature, max_tokens, top_k], [chatbot, gen_stats]
+            bot_turn,
+            [chatbot, temperature, max_tokens, top_k, repetition_penalty],
+            [chatbot, gen_stats],
         )
 
         send_btn.click(
             user_turn, [msg_input, chatbot], [msg_input, chatbot], queue=False
         ).then(
-            bot_turn, [chatbot, temperature, max_tokens, top_k], [chatbot, gen_stats]
+            bot_turn,
+            [chatbot, temperature, max_tokens, top_k, repetition_penalty],
+            [chatbot, gen_stats],
         )
 
         clear_btn.click(lambda: ([], "", ""), None, [chatbot, msg_input, gen_stats])

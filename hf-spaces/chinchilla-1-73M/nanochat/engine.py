@@ -11,14 +11,17 @@ Notes:
 The whole thing is made as efficient as possible.
 """
 
-import torch
-import torch.nn.functional as F
 import signal
 import warnings
-from contextlib import contextmanager
 from collections import deque
-from nanochat.common import compute_init, autodetect_device_type
+from contextlib import contextmanager
+
+import torch
+import torch.nn.functional as F
+
 from nanochat.checkpoint_manager import load_model
+from nanochat.common import autodetect_device_type, compute_init
+
 
 # -----------------------------------------------------------------------------
 # Calculator tool helpers
@@ -32,6 +35,7 @@ def timeout(duration, formula):
     yield
     signal.alarm(0)
 
+
 def eval_with_timeout(formula, max_time=3):
     try:
         with timeout(max_time, formula):
@@ -42,6 +46,7 @@ def eval_with_timeout(formula, max_time=3):
         signal.alarm(0)
         # print(f"Warning: Failed to eval {formula}, exception: {e}") # it's ok ignore wrong calculator usage
         return None
+
 
 def use_calculator(expr):
     """
@@ -59,24 +64,43 @@ def use_calculator(expr):
 
     # Check if it's a string operation we support
     # Allow: strings (single/double quotes), .count(), letters, numbers, spaces, parens
-    allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'\"()._ "
+    allowed_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'\"()._ "
+    )
     if not all([x in allowed_chars for x in expr]):
         return None
 
     # Disallow dangerous patterns
-    dangerous_patterns = ['__', 'import', 'exec', 'eval', 'compile', 'open', 'file',
-                         'input', 'raw_input', 'globals', 'locals', 'vars', 'dir',
-                         'getattr', 'setattr', 'delattr', 'hasattr']
+    dangerous_patterns = [
+        "__",
+        "import",
+        "exec",
+        "eval",
+        "compile",
+        "open",
+        "file",
+        "input",
+        "raw_input",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
+    ]
     expr_lower = expr.lower()
     if any(pattern in expr_lower for pattern in dangerous_patterns):
         return None
 
     # Only allow .count() method for now (can expand later)
-    if '.count(' not in expr:
+    if ".count(" not in expr:
         return None
 
     # Evaluate with timeout
     return eval_with_timeout(expr)
+
 
 # -----------------------------------------------------------------------------
 class KVCache:
@@ -89,15 +113,33 @@ class KVCache:
     - Position tracked per batch element via cache_seqlens tensor
     """
 
-    def __init__(self, batch_size, num_heads, seq_len, head_dim, num_layers, device, dtype):
+    def __init__(
+        self, batch_size, num_heads, seq_len, head_dim, num_layers, device, dtype
+    ):
         self.batch_size = batch_size
         self.max_seq_len = seq_len
         self.n_layers = num_layers
         self.n_heads = num_heads
         self.head_dim = head_dim
         # Pre-allocate cache tensors: (n_layers, B, T, H, D)
-        self.k_cache = torch.zeros(num_layers, batch_size, seq_len, num_heads, head_dim, device=device, dtype=dtype)
-        self.v_cache = torch.zeros(num_layers, batch_size, seq_len, num_heads, head_dim, device=device, dtype=dtype)
+        self.k_cache = torch.zeros(
+            num_layers,
+            batch_size,
+            seq_len,
+            num_heads,
+            head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        self.v_cache = torch.zeros(
+            num_layers,
+            batch_size,
+            seq_len,
+            num_heads,
+            head_dim,
+            device=device,
+            dtype=dtype,
+        )
         # Current sequence length per batch element (FA3 needs int32)
         self.cache_seqlens = torch.zeros(batch_size, dtype=torch.int32, device=device)
         # Previous token's normalized embedding for smear (set by model forward pass)
@@ -126,7 +168,11 @@ class KVCache:
         Used when we do batch=1 prefill and then want to generate multiple samples in parallel.
         """
         assert self.get_pos() == 0, "Cannot prefill a non-empty KV cache"
-        assert self.n_layers == other.n_layers and self.n_heads == other.n_heads and self.head_dim == other.head_dim
+        assert (
+            self.n_layers == other.n_layers
+            and self.n_heads == other.n_heads
+            and self.head_dim == other.head_dim
+        )
         assert self.max_seq_len >= other.max_seq_len
         other_pos = other.get_pos()
         self.k_cache[:, :, :other_pos, :, :] = other.k_cache[:, :, :other_pos, :, :]
@@ -134,13 +180,30 @@ class KVCache:
         self.cache_seqlens.fill_(other_pos)
         # Copy smear state: expand batch=1 prev_embedding to num_samples
         if other.prev_embedding is not None:
-            self.prev_embedding = other.prev_embedding.expand(self.batch_size, -1, -1).clone()
+            self.prev_embedding = other.prev_embedding.expand(
+                self.batch_size, -1, -1
+            ).clone()
+
 
 # -----------------------------------------------------------------------------
 @torch.inference_mode()
-def sample_next_token(logits, rng, temperature=1.0, top_k=None):
+def sample_next_token(
+    logits,
+    rng,
+    temperature=1.0,
+    top_k=None,
+    repetition_penalty=1.0,
+    penalty_tokens=None,
+):
     """Sample a single next token from given logits of shape (B, vocab_size). Returns (B, 1)."""
     assert temperature >= 0.0, "temperature must be non-negative"
+
+    # Apply repetition penalty: divide logits of previously generated tokens
+    if repetition_penalty != 1.0 and penalty_tokens is not None:
+        for token_id in penalty_tokens:
+            if token_id < logits.size(-1):
+                logits[:, token_id] /= repetition_penalty
+
     if temperature == 0.0:
         return torch.argmax(logits, dim=-1, keepdim=True)
     if top_k is not None and top_k > 0:
@@ -155,27 +218,42 @@ def sample_next_token(logits, rng, temperature=1.0, top_k=None):
         probs = F.softmax(logits, dim=-1)
         return torch.multinomial(probs, num_samples=1, generator=rng)
 
+
 # -----------------------------------------------------------------------------
+
 
 class RowState:
     # Per-row state tracking during generation
     def __init__(self, current_tokens=None):
-        self.current_tokens = current_tokens or [] # Current token sequence for this row
-        self.forced_tokens = deque() # Queue of tokens to force inject
-        self.in_python_block = False # Whether we are inside a python block
-        self.python_expr_tokens = [] # Tokens of the current python expression
-        self.completed = False # Whether this row has completed generation
+        self.current_tokens = (
+            current_tokens or []
+        )  # Current token sequence for this row
+        self.forced_tokens = deque()  # Queue of tokens to force inject
+        self.in_python_block = False  # Whether we are inside a python block
+        self.python_expr_tokens = []  # Tokens of the current python expression
+        self.completed = False  # Whether this row has completed generation
+
 
 class Engine:
-
     def __init__(self, model, tokenizer):
         self.model = model
-        self.tokenizer = tokenizer # needed for tool use
+        self.tokenizer = tokenizer  # needed for tool use
 
     @torch.inference_mode()
-    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42):
+    def generate(
+        self,
+        tokens,
+        num_samples=1,
+        max_tokens=None,
+        temperature=1.0,
+        top_k=None,
+        seed=42,
+        repetition_penalty=1.0,
+    ):
         """Same as generate, but does single prefill and then clones the KV cache."""
-        assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
+        assert isinstance(tokens, list) and isinstance(tokens[0], int), (
+            "expecting list of ints"
+        )
         device = self.model.get_device()
         # NOTE: setting the dtype here and in this way is an ugly hack.
         # Currently the repo assumes that cuda -> bfloat16 and everything else -> float32.
@@ -193,12 +271,16 @@ class Engine:
         python_end = get_special("<|python_end|>")
         output_start = get_special("<|output_start|>")
         output_end = get_special("<|output_end|>")
-        assistant_end = get_special("<|assistant_end|>") # if sampled, ends row
-        bos = self.tokenizer.get_bos_token_id() # if sampled, ends row
+        assistant_end = get_special("<|assistant_end|>")  # if sampled, ends row
+        bos = self.tokenizer.get_bos_token_id()  # if sampled, ends row
 
         # 1) Run a batch 1 prefill of the prompt tokens
         m = self.model.config
-        kv_model_kwargs = {"num_heads": m.n_kv_head, "head_dim": m.n_embd // m.n_head, "num_layers": m.n_layer}
+        kv_model_kwargs = {
+            "num_heads": m.n_kv_head,
+            "head_dim": m.n_embd // m.n_head,
+            "num_layers": m.n_layer,
+        }
         kv_cache_prefill = KVCache(
             batch_size=1,
             seq_len=len(tokens),
@@ -211,7 +293,11 @@ class Engine:
         logits = logits[:, -1, :].expand(num_samples, -1)  # (num_samples, vocab_size)
 
         # 2) Replicate the KV cache for each sample/row
-        kv_length_hint = (len(tokens) + max_tokens) if max_tokens is not None else self.model.config.sequence_len
+        kv_length_hint = (
+            (len(tokens) + max_tokens)
+            if max_tokens is not None
+            else self.model.config.sequence_len
+        )
         kv_cache_decode = KVCache(
             batch_size=num_samples,
             seq_len=kv_length_hint,
@@ -220,7 +306,7 @@ class Engine:
             **kv_model_kwargs,
         )
         kv_cache_decode.prefill(kv_cache_prefill)
-        del kv_cache_prefill # no need to keep this memory around
+        del kv_cache_prefill  # no need to keep this memory around
 
         # 3) Initialize states for each sample
         row_states = [RowState(tokens.copy()) for _ in range(num_samples)]
@@ -235,18 +321,32 @@ class Engine:
             if all(state.completed for state in row_states):
                 break
 
+            # Apply repetition penalty per row (penalize only generated tokens, not the prompt)
+            if repetition_penalty != 1.0:
+                for i, state in enumerate(row_states):
+                    generated_tokens = state.current_tokens[len(tokens) :]
+                    for gen_token in set(generated_tokens):
+                        if gen_token < logits.size(-1):
+                            logits[i, gen_token] /= repetition_penalty
+
             # Sample the next token for each row
             next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)
             sampled_tokens = next_ids[:, 0].tolist()
 
             # Process each row: choose the next token, update state, optional tool use
-            token_column = [] # contains the next token id along each row
-            token_masks = [] # contains the mask (was it sampled (1) or forced (0)?) along each row
+            token_column = []  # contains the next token id along each row
+            token_masks = []  # contains the mask (was it sampled (1) or forced (0)?) along each row
             for i, state in enumerate(row_states):
                 # Select the next token in this row
-                is_forced = len(state.forced_tokens) > 0 # are there tokens waiting to be forced in deque?
-                token_masks.append(0 if is_forced else 1) # mask is 0 if forced, 1 if sampled
-                next_token = state.forced_tokens.popleft() if is_forced else sampled_tokens[i]
+                is_forced = (
+                    len(state.forced_tokens) > 0
+                )  # are there tokens waiting to be forced in deque?
+                token_masks.append(
+                    0 if is_forced else 1
+                )  # mask is 0 if forced, 1 if sampled
+                next_token = (
+                    state.forced_tokens.popleft() if is_forced else sampled_tokens[i]
+                )
                 token_column.append(next_token)
                 # Update the state of this row to include the next token
                 state.current_tokens.append(next_token)
@@ -276,8 +376,12 @@ class Engine:
             num_generated += 1
 
             # Prepare logits for next iteration
-            ids = torch.tensor(token_column, dtype=torch.long, device=device).unsqueeze(1)
-            logits = self.model.forward(ids, kv_cache=kv_cache_decode)[:, -1, :]  # (B, vocab_size)
+            ids = torch.tensor(token_column, dtype=torch.long, device=device).unsqueeze(
+                1
+            )
+            logits = self.model.forward(ids, kv_cache=kv_cache_decode)[
+                :, -1, :
+            ]  # (B, vocab_size)
 
     def generate_batch(self, tokens, num_samples=1, **kwargs):
         """
@@ -310,6 +414,7 @@ if __name__ == "__main__":
     is equivalent to the faster Engine.generate function here.
     """
     import time
+
     # init compute
     device_type = autodetect_device_type()
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
@@ -319,7 +424,9 @@ if __name__ == "__main__":
     # common hyperparameters
     kwargs = dict(max_tokens=64, temperature=0.0)
     # set the starting prompt
-    prompt_tokens = tokenizer.encode("The chemical formula of water is", prepend=bos_token_id)
+    prompt_tokens = tokenizer.encode(
+        "The chemical formula of water is", prepend=bos_token_id
+    )
     # generate the reference sequence using the model.generate() function
     generated_tokens = []
     torch.cuda.synchronize()
@@ -337,11 +444,13 @@ if __name__ == "__main__":
     # generate tokens with Engine
     generated_tokens = []
     engine = Engine(model, tokenizer)
-    stream = engine.generate(prompt_tokens, num_samples=1, **kwargs) # note: runs in fp32
+    stream = engine.generate(
+        prompt_tokens, num_samples=1, **kwargs
+    )  # note: runs in fp32
     torch.cuda.synchronize()
     t0 = time.time()
     for token_column, token_masks in stream:
-        token = token_column[0] # only print out the first row
+        token = token_column[0]  # only print out the first row
         generated_tokens.append(token)
         chunk = tokenizer.decode([token])
         print(chunk, end="", flush=True)
