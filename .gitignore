@@ -31,3 +31,5 @@ Thumbs.db
 # Environment files
 .env
 .env.local
+
+# Large weights are LFS-managed via .gitattributes — do not add *.pt, *.bin, *.safetensors, *.gguf, etc. here.

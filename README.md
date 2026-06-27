@@ -1,30 +1,93 @@
-# Chinchilla
+# Chinchilla — Model Training Project
 
-Supervised Fine-Tuning (SFT) of [karpathy/nanochat](https://github.com/karpathy/nanochat) language models — trained on [Modal](https://modal.com) cloud GPUs with ResFormer-style value embeddings, sliding window attention, and knowledge distillation.
+![MIT License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
 
-**d6 model:** 6-layer, 384-dim, ~ 73.5M parameters. Quick to train (~$1.20 on 2× A10G), runs on CPU.
+This repo houses **two model tracks** trained on [Modal](https://modal.com) cloud GPUs:
 
-## Quick Links
+| Track | Model | Size | Stage |
+|-------|-------|------|-------|
+| **Chinchilla-1** | SFT of [karpathy/nanochat](https://github.com/karpathy/nanochat) | 73M params | ✅ Published to HF |
+| **Mars-1.0** | Agent finetune of [LiquidAI/LFM2.5-8B-A1B-Base](https://huggingface.co/LiquidAI/LFM2.5-8B-A1B-Base) | ~8B (active) | 🔄 In progress |
 
-| Resource | Description |
-|---|---|
-| [`nanochat_modal/README.md`](nanochat_modal/README.md) | Project setup, SFT pipeline, and commands |
-| [`nanochat_modal/docs/ARCHITECTURE.md`](nanochat_modal/docs/ARCHITECTURE.md) | Model architecture and parameter breakdown |
-| [`nanochat_modal/docs/TRAINING.md`](nanochat_modal/docs/TRAINING.md) | Full training guide: setup, data, hyperparameters |
-| [`nanochat_modal/docs/SFT_REPORT.md`](nanochat_modal/docs/SFT_REPORT.md) | Technical report from the SFT run |
-| [`nanochat_modal/docs/INFERENCE.md`](nanochat_modal/docs/INFERENCE.md) | Web server, CLI, and programmatic inference |
-| [`nanochat_modal/docs/COMPARISON.md`](nanochat_modal/docs/COMPARISON.md) | Checkpoint comparison script usage |
-| [`nanochat_modal/docs/DEVLOG.md`](nanochat_modal/docs/DEVLOG.md) | Development log, decisions, and bug history |
+---
 
-## Repository Structure
+## 📦 Chinchilla-1 (73M)
+
+A small, CPU-runnable chat model — fine-tuned from Karpathy's nanochat with ResFormer-style value embeddings and sliding window attention. Trained for ~$1.20 on 2× A10G.
+
+**Quick links:**
+
+| Resource | Location |
+|----------|----------|
+| Model card & artifacts | [`models/chinchilla-1/`](models/chinchilla-1/) |
+| Source code & training pipeline | [`archive/nanochat_modal/`](archive/nanochat_modal/) |
+| Technical report | [`archive/nanochat_modal/docs/SFT_REPORT.md`](archive/nanochat_modal/docs/SFT_REPORT.md) |
+| Architecture doc | [`archive/nanochat_modal/docs/ARCHITECTURE.md`](archive/nanochat_modal/docs/ARCHITECTURE.md) |
+
+> **Status:** Published to HuggingFace Hub. See the [model card](models/chinchilla-1/README.md) for usage and inference.
+
+---
+
+## 🚀 Mars-1.0 (8B-A1B Agent)
+
+A Liquid Foundation Model finetune — targeting tool-use and agentic benchmarks. Built on the LFM2.5 mixture-of-experts architecture.
+
+**Quick links:**
+
+| Resource | Location |
+|----------|----------|
+| Training pipeline | [`train/`](train/) |
+| SFT configs | [`train/configs/`](train/configs/) |
+| Eval harness | [`train/evals/`](train/evals/) |
+
+> **Status:** In development. Pipeline scaffold lives under [`train/`](train/).
+
+---
+
+## 📁 Repository Layout
 
 ```
-├── nanochat_modal/
-│   ├── nanochat/            # Core library: GPT model, tokenizer, engine, scripts
-│   ├── checkpoints/         # Trained checkpoints (pretrain, sft, sft-d6, tokenizer)
-│   ├── training/            # Modal cloud training scripts
-│   ├── evaluations/         # Evaluation results and analysis
-│   └── docs/                # Comprehensive documentation
-├── README.md                # This file
-└── LICENSE                  # MIT
+temp-file-share/
+├── README.md                   # This file
+├── notes.md                    # Master plan & research notes
+├── LICENSE                     # MIT
+├── models/
+│   └── chinchilla-1/           # Chinchilla-1 HF publish artifacts
+│       ├── README.md           #   Model card
+│       ├── config.json         #   Model config
+│       ├── inference.py        #   Inference script
+│       └── evals/              #   Evaluation results
+├── train/                      # Mars-1.0 LFM training pipeline
+│   ├── modal_app.py            #   Modal entrypoint
+│   ├── configs/                #   Training configs (YAML)
+│   ├── scripts/                #   Training & export scripts
+│   └── evals/                  #   Benchmark suites
+├── archive/
+│   └── nanochat_modal/         # Chinchilla-1 source (preserved)
+│       ├── checkpoints/        #   All trained checkpoints
+│       ├── evaluations/        #   Evaluation results
+│       ├── docs/               #   Documentation
+│       └── training/           #   Modal training scripts
+└── .gitignore
 ```
+
+## 🔧 Setup
+
+```bash
+git clone https://github.com/<your-org>/temp-file-share
+cd temp-file-share
+
+# For Chinchilla-1 (runs on CPU)
+cd archive/nanochat_modal
+pip install -e nanochat
+
+# For Mars-1.0 (Modal cloud)
+cd train
+pip install modal fastapi
+modal setup
+```
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
