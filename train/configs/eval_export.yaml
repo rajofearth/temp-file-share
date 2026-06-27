@@ -1,0 +1,14 @@
+# Eval + export after GRPO
+
+project_name: mars_grpo
+model_id: LiquidAI/LFM2.5-8B-A1B
+stage_label: mars_grpo_final
+
+previous_stage:
+  stage: grpo
+  project_name: mars_grpo
+
+export_name: Mars-1.0-8B-A1B
+# hf_repo: YOUR_ORG/Mars-1.0-8B-A1B  # uncomment to push
+
+source_stage: grpo

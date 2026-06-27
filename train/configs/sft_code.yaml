@@ -1,0 +1,46 @@
+# Mars-1.0 SFT-2: coding mix (Ornith-lite week 5)
+# Continue from SFT-1 adapter; keep 15% SmolTalk to prevent regression
+
+project_name: mars_sft_code
+model_id: LiquidAI/LFM2.5-8B-A1B
+
+previous_stage:
+  stage: sft
+  project_name: mars_sft_agent
+
+dataset:
+  seed: 42
+  mix:
+    - name: smoltalk
+      path: HuggingFaceTB/smoltalk
+      subset: all
+      split: train
+      weight: 0.15
+
+    - name: agent_traces
+      path: DJLougen/hermes-agent-traces-filtered
+      split: train
+      weight: 0.15
+
+    - name: codefeedback
+      path: HuggingFaceH4/codefeedback-filtered
+      split: train
+      weight: 0.70
+
+peft:
+  enabled: false
+
+training:
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 1.0e-4
+  max_length: 4096
+  gradient_checkpointing: true
+  save_steps: 200
+  save_total_limit: 3
+
+modal:
+  gpu: A10G
+  timeout_hours: 14
+  volume: mars-train-vol

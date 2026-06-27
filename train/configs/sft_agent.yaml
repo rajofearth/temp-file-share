@@ -1,0 +1,54 @@
+# Mars-1.0 SFT-1: agent + tool format (Ornith-lite week 3-4)
+# Starting point: LiquidAI/LFM2.5-8B-A1B (instruct — tool-native, BFCL ~48.5)
+#
+# Mix: Synth-APIGen + SmolTalk 20% + Hermes agent traces
+# Docs: https://docs.liquid.ai/lfm/fine-tuning/trl.md
+
+project_name: mars_sft_agent
+model_id: LiquidAI/LFM2.5-8B-A1B
+
+dataset:
+  seed: 42
+  # limit: 500  # smoke test
+  mix:
+    - name: synth_apigen
+      path: argilla/Synth-APIGen-v0.1
+      split: train
+      weight: 0.50
+
+    - name: smoltalk
+      path: HuggingFaceTB/smoltalk
+      subset: all
+      split: train
+      weight: 0.20
+
+    - name: agent_traces
+      path: DJLougen/hermes-agent-traces-filtered
+      split: train
+      weight: 0.30
+
+peft:
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: all-linear
+
+training:
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  max_length: 4096
+  gradient_checkpointing: true
+  logging_steps: 10
+  save_steps: 200
+  save_total_limit: 5
+  report_to: none
+
+modal:
+  app_name: mars-lfm-train
+  gpu: A10G
+  timeout_hours: 14
+  volume: mars-train-vol

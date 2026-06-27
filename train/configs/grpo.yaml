@@ -1,0 +1,65 @@
+# Mars-1.0 GRPO (Ornith-lite week 7-8)
+# Verifiable rewards for agent harnesses: tool format, JSON args, conciseness, solution match
+# A10G: use_vllm=false (MoE 8B + colocated vLLM OOMs). Burst A100 and set use_vllm=true for speed.
+
+project_name: mars_grpo
+model_id: LiquidAI/LFM2.5-8B-A1B
+
+previous_stage:
+  stage: dpo
+  project_name: mars_dpo
+
+dataset:
+  seed: 42
+  # limit: 1500
+  sources:
+    - name: synth_apigen
+      path: argilla/Synth-APIGen-v0.1
+      split: train
+      weight: 0.40
+
+    - name: agent_traces
+      path: DJLougen/hermes-agent-traces-filtered
+      split: train
+      weight: 0.30
+
+    - name: gsm8k
+      path: openai/gsm8k
+      subset: main
+      split: train
+      weight: 0.15
+
+    - name: humaneval
+      path: openai/openai_humaneval
+      split: test
+      weight: 0.15
+
+rewards:
+  funcs:
+    - lfm_tool_format
+    - tool_json_args
+    - concise
+    - solution_match
+    - ifeval_keyword
+  weights: [0.35, 0.25, 0.15, 0.20, 0.05]
+
+peft:
+  enabled: false
+
+training:
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-6
+  num_generations: 4
+  max_completion_length: 512
+  temperature: 0.7
+  beta: 0.0
+  use_vllm: false
+  save_steps: 100
+  save_total_limit: 3
+
+modal:
+  gpu: A10G
+  timeout_hours: 14
+  volume: mars-train-vol

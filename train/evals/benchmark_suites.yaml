@@ -1,0 +1,39 @@
+# Benchmark suites for Mars-1.0 regression tracking (run after each stage)
+
+baseline_model: LiquidAI/LFM2.5-8B-A1B
+
+suites:
+  agent_tools:
+    description: LFM bracket tool-call format (BFCL-lite)
+    metrics:
+      - lfm_tool_format_mean
+      - tool_json_args_mean
+      - tool_eval_accuracy
+    regression_threshold: -0.05  # abort if drops >5% vs baseline
+
+  instruction_following:
+    description: IFEval-style keyword checks in GRPO rewards
+    metrics:
+      - ifeval_keyword_mean
+    regression_threshold: -0.05
+
+  qualitative:
+    description: 12-question suite from nanochat comparison methodology
+    source: archive/nanochat_modal/docs/COMPARISON.md
+    count: 12
+
+  coding:
+    description: HumanEval pass@1 (GRPO reward stage)
+    metrics:
+      - humaneval_pass_at_1
+    stretch_goal: +0.05
+
+  agent_harness_targets:
+    description: Platforms this pipeline optimizes for
+    platforms:
+      - Cursor (tool JSON + concise edits)
+      - Zed (agent panel tool calls)
+      - OpenAI-compatible APIs (vLLM lfm2 parser)
+      - LM Studio / llama.cpp (post-export GGUF)
+
+eval_output: /vol/evals/
